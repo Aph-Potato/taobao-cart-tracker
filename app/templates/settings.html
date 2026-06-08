@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}设置 - 淘宝购物车价格追踪{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-2xl mx-auto">
+    <a href="/" class="text-gray-500 hover:text-gray-700 text-sm">← 返回仪表盘</a>
+
+    <div class="card">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">🕐 抓取设置</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">自动抓取间隔（小时）</label>
+                <div class="flex items-center space-x-3">
+                    <input type="number" id="scrapeInterval" value="{{ settings.scrape_interval_hours }}"
+                           min="1" max="72" class="w-24 px-3 py-2 border border-gray-300 rounded-lg">
+                    <span class="text-sm text-gray-400">建议 1-24 小时</span>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-600 mb-1">全局降价提醒</label>
+                <div class="text-xs text-gray-400 mb-2">
+                    每次抓取时自动检测：如果商品现价比上次价格便宜超过这个比例就通知。设为 0 则只有降到历史最低价才提醒。
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-gray-500">降价超过</span>
+                    <input type="number" id="priceDropPct" value="{{ settings.price_drop_pct }}"
+                           min="0" max="99" step="1" class="w-20 px-3 py-2 border border-gray-300 rounded-lg">
+                    <span class="text-sm text-gray-500">% 时提醒我</span>
+                </div>
+            </div>
+            <button onclick="saveSettings()" class="bg-taobao text-white px-6 py-2 rounded-lg hover:bg-taobao-dark transition text-sm font-medium">
+                💾 保存设置
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+    async function saveSettings() {
+        const settings = {
+            scrape_interval_hours: document.getElementById('scrapeInterval').value,
+            price_drop_pct: document.getElementById('priceDropPct').value,
+        };
+        try {
+            await fetch('/api/settings', {
+                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings),
+            });
+            showToast('✅ 设置已保存', 'success');
+        } catch(e) { showToast('❌ 保存失败', 'error'); }
+    }
+</script>
+{% endblock %}

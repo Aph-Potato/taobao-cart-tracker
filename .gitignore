@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+data/browser_profile/
+data/tracker.db
+.env
+*.egg-info/
+dist/

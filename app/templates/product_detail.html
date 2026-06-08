@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} - 价格趋势{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- 返回链接 -->
+    <a href="/" class="text-gray-500 hover:text-gray-700 text-sm">← 返回仪表盘</a>
+
+    <!-- 商品头部 -->
+    <div class="card">
+        <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6">
+            <!-- 商品图片 -->
+            <div class="flex-shrink-0">
+                {% if product.image_url %}
+                <img src="{{ product.image_url }}" alt="{{ product.name }}"
+                     class="w-32 h-32 object-cover rounded-lg bg-gray-100"
+                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><rect fill=%22%23f0f0f0%22 width=%22128%22 height=%22128%22/><text x=%2220%22 y=%2270%22 fill=%22%23999%22 font-size=%2218%22>暂无图片</text></svg>'">
+                {% else %}
+                <div class="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">暂无图片</div>
+                {% endif %}
+            </div>
+
+            <!-- 商品信息 -->
+            <div class="flex-1">
+                <h1 class="text-xl font-semibold text-gray-900">{{ product.name }}</h1>
+                {% if product.shop_name %}
+                <p class="text-sm text-gray-400 mt-1">🏪 {{ product.shop_name }}</p>
+                {% endif %}
+
+                <div class="flex items-baseline space-x-3 mt-4">
+                    <span class="text-3xl font-bold text-taobao">
+                        ¥{{ "%.2f"|format(stats.current_price) if stats and stats.current_price else 'N/A' }}
+                    </span>
+                    {% if stats and stats.current_original_price and stats.current_original_price > (stats.current_price or 0) %}
+                    <span class="text-lg text-gray-400 line-through">¥{{ "%.2f"|format(stats.current_original_price) }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- 价格统计 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                        <div class="text-xs text-gray-500">历史最低</div>
+                        <div class="text-lg font-bold text-green-600">
+                            ¥{{ "%.2f"|format(lowest.lowest_price) if lowest and lowest.lowest_price else 'N/A' }}
+                        </div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                        <div class="text-xs text-gray-500">历史最高</div>
+                        <div class="text-lg font-bold text-red-500">
+                            ¥{{ "%.2f"|format(stats.max_price) if stats and stats.max_price else 'N/A' }}
+                        </div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                        <div class="text-xs text-gray-500">均价</div>
+                        <div class="text-lg font-bold text-gray-700">
+                            ¥{{ "%.2f"|format(stats.avg_price) if stats and stats.avg_price else 'N/A' }}
+                        </div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-50 rounded-lg">
+                        <div class="text-xs text-gray-500">记录数</div>
+                        <div class="text-lg font-bold text-gray-700">{{ stats.total_records if stats else 0 }}</div>
+                    </div>
+                </div>
+
+                {% if product.url %}
+                <a href="{{ product.url }}" target="_blank"
+                   class="inline-block mt-4 text-sm text-taobao hover:text-taobao-dark">
+                    🔗 在淘宝中查看 →
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 价格趋势图 -->
+    <div class="card">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-gray-800">📈 价格趋势</h2>
+            <div class="flex space-x-1">
+                <button onclick="loadChart(7)" id="btn-7" class="px-3 py-1 text-xs rounded-lg bg-taobao text-white border border-taobao transition">7天</button>
+                <button onclick="loadChart(30)" id="btn-30" class="px-3 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-100 transition">30天</button>
+                <button onclick="loadChart(90)" id="btn-90" class="px-3 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-100 transition">90天</button>
+                <button onclick="loadChart(180)" id="btn-180" class="px-3 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-100 transition">180天</button>
+                <button onclick="loadChart(0)" id="btn-0" class="px-3 py-1 text-xs rounded-lg border border-gray-300 hover:bg-gray-100 transition">全部</button>
+            </div>
+        </div>
+        <div id="mainChart" style="width:100%;height:400px;"></div>
+    </div>
+
+    <!-- 价格记录表格 -->
+    <div class="card">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">📋 价格记录</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200">
+                        <th class="text-left py-2 px-3 text-gray-500 font-medium">时间</th>
+                        <th class="text-right py-2 px-3 text-gray-500 font-medium">价格</th>
+                        <th class="text-right py-2 px-3 text-gray-500 font-medium">原价</th>
+                        <th class="text-center py-2 px-3 text-gray-500 font-medium">来源</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in history|reverse %}
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-2 px-3 text-gray-600">
+                            {{ record.recorded_at[:16]|replace('T', ' ') if record.recorded_at else '' }}
+                        </td>
+                        <td class="py-2 px-3 text-right font-medium text-gray-900">
+                            ¥{{ "%.2f"|format(record.price) }}
+                        </td>
+                        <td class="py-2 px-3 text-right text-gray-400">
+                            {% if record.original_price %}
+                            ¥{{ "%.2f"|format(record.original_price) }}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center">
+                            <span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded">自动</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 设置提醒 -->
+    <div class="card">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">🔔 设置价格提醒</h2>
+        <div class="flex flex-wrap gap-3">
+            <button onclick="createAlert('lowest_price')"
+                    class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm">
+                📉 历史最低价时提醒
+            </button>
+            <button onclick="createAlert('price_drop_pct')"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm">
+                📊 价格下降超过
+                <select id="dropPct" class="bg-transparent border-b border-white/50 mx-1" onclick="event.stopPropagation()">
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                    <option value="15">15%</option>
+                    <option value="20" selected>20%</option>
+                    <option value="30">30%</option>
+                </select>
+                时提醒
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    let currentDays = 7;
+    let myChart = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadChart(7);
+    });
+
+    function setActiveButton(days) {
+        document.querySelectorAll('[id^="btn-"]').forEach(b => {
+            b.classList.remove('bg-taobao', 'text-white', 'border-taobao');
+            b.classList.add('border-gray-300');
+        });
+        const btn = document.getElementById('btn-' + days);
+        if (btn) {
+            btn.classList.add('bg-taobao', 'text-white', 'border-taobao');
+            btn.classList.remove('border-gray-300');
+        }
+    }
+
+    async function loadChart(days) {
+        currentDays = days;
+        setActiveButton(days);
+
+        try {
+            const res = await fetch(`/api/products/{{ product.id }}/history?limit=9999`);
+            const data = await res.json();
+            let records = data.records || [];
+
+            // 按天数过滤
+            if (days > 0) {
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - days);
+                records = records.filter(r => new Date(r.recorded_at) >= cutoff);
+            }
+            // days === 0: 全部，不过滤
+
+            if (!records || records.length < 1) {
+                document.getElementById('mainChart').innerHTML = '<div class=\"text-center text-gray-400 py-20\">暂无数据</div>';
+                return;
+            }
+
+            if (!myChart) {
+                myChart = echarts.init(document.getElementById('mainChart'));
+            }
+
+            const dates = records.map(r => r.recorded_at);
+            const prices = records.map(r => r.price);
+            const originalPrices = records.map(r => r.original_price);
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices, ...originalPrices.filter(Boolean));
+            const currentPrice = prices[prices.length - 1];
+            const lowestPrice = Math.min(...prices);
+
+            // 构造时间轴数据 [{name: date, value: [date, price]}]
+            const timeData = records.map(r => ({
+                name: r.recorded_at,
+                value: [r.recorded_at, r.price],
+            }));
+            const origTimeData = records.map(r => ({
+                name: r.recorded_at,
+                value: [r.recorded_at, r.original_price],
+            }));
+
+            myChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        const d = new Date(params[0].name);
+                        const dateStr = d.toLocaleDateString('zh-CN');
+                        let html = dateStr + '<br/>';
+                        params.forEach(p => {
+                            if (p.value && p.value[1] !== null && p.value[1] !== undefined) {
+                                html += `${p.marker} ${p.seriesName}: ¥${p.value[1].toFixed(2)}<br/>`;
+                            }
+                        });
+                        return html;
+                    }
+                },
+                legend: {
+                    data: ['实际价格', '划线原价', '历史最低'],
+                    bottom: 0,
+                    formatter: function(name) {
+                        if (name === '历史最低') return `历史最低: ¥${lowestPrice.toFixed(2)}`;
+                        return name;
+                    },
+                },
+                grid: { top: 20, right: 30, bottom: 40, left: 60 },
+                xAxis: {
+                    type: 'time',
+                    axisLabel: {
+                        formatter: '{yyyy}-{MM}-{dd}',
+                        rotate: 30,
+                        fontSize: 11,
+                    },
+                    splitLine: { show: false },
+                },
+                yAxis: {
+                    type: 'value', min: minPrice * 0.9, max: maxPrice * 1.1,
+                    axisLabel: { formatter: '¥{value}' },
+                    splitLine: { lineStyle: { color: '#f0f0f0' } },
+                },
+                series: [
+                    {
+                        name: '实际价格', data: timeData, type: 'line', smooth: true,
+                        symbol: 'circle', symbolSize: 4,
+                        lineStyle: { color: '#ff5000', width: 3 },
+                        itemStyle: { color: '#ff5000' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(255,80,0,0.2)' },
+                                { offset: 1, color: 'rgba(255,80,0,0.02)' }
+                            ])
+                        },
+                        markLine: {
+                            silent: true, symbol: 'none',
+                            lineStyle: { color: '#52c41a', type: 'dashed', width: 2 },
+                            label: { show: false },
+                            data: [{ yAxis: lowestPrice }]
+                        },
+                        markPoint: {
+                            data: [{
+                                name: '当前',
+                                coord: [dates[dates.length - 1], currentPrice],
+                                value: `¥${currentPrice.toFixed(2)}`,
+                                itemStyle: { color: '#ff5000' }
+                            }]
+                        }
+                    },
+                    {
+                        name: '划线原价', data: origTimeData, type: 'line',
+                        smooth: true, symbol: 'circle', symbolSize: 5,
+                        lineStyle: { color: '#999', type: 'solid', width: 2 },
+                        itemStyle: { color: '#999' },
+                    },
+                    {
+                        name: '历史最低', type: 'line',
+                        data: [null],  // 占位让图例显示绿色虚线标记
+                        lineStyle: { color: '#52c41a', type: 'dashed', width: 2 },
+                        itemStyle: { color: '#52c41a' },
+                    },
+                ],
+            });
+        } catch (e) {
+            console.error('渲染图表失败:', e);
+        }
+    }
+
+    window.addEventListener('resize', () => { if (myChart) myChart.resize(); });
+
+    async function createAlert(alertType) {
+        let thresholdValue = null;
+        if (alertType === 'price_drop_pct') {
+            thresholdValue = parseFloat(document.getElementById('dropPct').value);
+        }
+
+        try {
+            const res = await fetch('/api/alerts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    product_id: {{ product.id }},
+                    alert_type: alertType,
+                    threshold_value: thresholdValue,
+                }),
+            });
+            const data = await res.json();
+            showToast('✅ 提醒已设置', 'success');
+        } catch (e) {
+            showToast('❌ 设置失败', 'error');
+        }
+    }
+</script>
+{% endblock %}

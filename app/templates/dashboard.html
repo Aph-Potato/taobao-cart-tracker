@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - 淘宝购物车价格追踪{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- 统计概览 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card flex items-center space-x-3 !p-3">
+            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-xl">📦</div>
+            <div>
+                <div class="text-xs text-gray-500">可购买</div>
+                <div class="text-xl font-bold">{{ avail_count }}</div>
+            </div>
+        </div>
+        <div class="card flex items-center space-x-3 !p-3">
+            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-xl">⚠️</div>
+            <div>
+                <div class="text-xs text-gray-500">已失效</div>
+                <div class="text-xl font-bold">{{ unavail_count }}</div>
+            </div>
+        </div>
+        <div class="card flex items-center space-x-3 !p-3">
+            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-xl">📉</div>
+            <div>
+                <div class="text-xs text-gray-500">历史最低</div>
+                {% set count = namespace(val=0) %}
+                {% for sd in shops.values() %}
+                    {% for p in sd.available %}
+                        {% if p.current_price and p.lowest_price and p.current_price <= p.lowest_price %}
+                            {% set count.val = count.val + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                <div class="text-xl font-bold">{{ count.val }}</div>
+            </div>
+        </div>
+        <div class="card flex items-center space-x-3 !p-3">
+            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-xl">🔔</div>
+            <div>
+                <div class="text-xs text-gray-500">通知</div>
+                <div class="text-xl font-bold">{{ notifications|selectattr('read', 'equalto', false)|list|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    {% if last_scrape %}
+    <div class="text-xs text-gray-400 text-center">
+        上次抓取：
+        {% if last_scrape.success %}
+        <span class="text-green-600">✓ 成功</span>，{{ last_scrape.items_found }} 个商品
+        {% else %}
+        <span class="text-red-500">✗ 失败</span>：{{ last_scrape.message }}
+        {% endif %}
+        &nbsp;·&nbsp;
+        {{ last_scrape.created_at[:16]|replace('T', ' ') }}
+    </div>
+    {% endif %}
+
+    {% if not shops %}
+    <div class="card text-center py-16">
+        <div class="text-6xl mb-4">🛒</div>
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">还没有商品数据</h2>
+        <button onclick="triggerScrape()" class="bg-taobao text-white px-6 py-3 rounded-lg hover:bg-taobao-dark transition font-medium">
+            🔄 立即抓取
+        </button>
+    </div>
+    {% else %}
+    <!-- 搜索栏 -->
+    <div class="sticky top-16 z-40 bg-gray-50 py-3 -mx-4 px-4">
+        <div class="relative max-w-md">
+            <input type="text" id="searchBox" placeholder="搜索商品名称或店铺..."
+                   class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm
+                          focus:ring-2 focus:ring-taobao focus:border-transparent bg-white">
+            <svg class="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </div>
+        <div id="noResults" class="hidden text-sm text-gray-400 mt-2">没有匹配的商品</div>
+    </div>
+
+    <!-- 按店铺分组 -->
+    {% for shop_name, data in shops.items() %}
+    <div class="shop-group mb-4" data-shop="{{ shop_name }}">
+        <button onclick="toggleShop(this)"
+                class="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200
+                       hover:border-gray-300 transition shadow-sm">
+            <div class="flex items-center space-x-3">
+                <span class="shop-arrow text-gray-400 transition-transform duration-200 text-xs">▼</span>
+                <span class="font-medium text-gray-700 text-sm">{{ shop_name }}</span>
+                <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {{ data.available|length + data.unavailable|length }}
+                </span>
+                {% if data.unavailable %}
+                <span class="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                    {{ data.unavailable|length }} 失效
+                </span>
+                {% endif %}
+            </div>
+        </button>
+        <div class="shop-items mt-2 grid grid-cols-1 lg:grid-cols-2 gap-3 ml-2">
+            <!-- 可购买商品 -->
+            {% for product in data.available %}
+                {% include "product_card.html" %}
+            {% endfor %}
+            <!-- 不可购买但同店 -->
+            {% for product in data.unavailable %}
+            <div class="card opacity-60 hover:opacity-100 transition-opacity" id="product-{{ product.id }}">
+                <div class="flex space-x-3">
+                    <div class="flex-shrink-0">
+                        {% if product.image_url %}
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}"
+                             class="w-16 h-16 object-cover rounded-lg bg-gray-100 grayscale"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect fill=%22%23f0f0f0%22 width=%2280%22 height=%2280%22/><text x=%2225%22 y=%2245%22 fill=%22%23999%22 font-size=%2214%22>暂无</text></svg>'">
+                        {% else %}
+                        <div class="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">暂无</div>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start">
+                            <a href="/product/{{ product.id }}" class="text-xs font-medium text-gray-500 hover:text-taobao transition line-clamp-2">
+                                {{ product.name }}
+                            </a>
+                            <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full whitespace-nowrap ml-2">
+                                {{ product.unavailable_reason or '已失效' }}
+                            </span>
+                        </div>
+                        {% if product.current_price %}
+                        <div class="text-base font-bold text-gray-400 mt-1">¥{{ "%.2f"|format(product.current_price) }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('searchBox').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase().trim();
+            const groups = document.querySelectorAll('.shop-group');
+            let anyVisible = false;
+
+            groups.forEach(group => {
+                const shopName = group.dataset.shop.toLowerCase();
+                const cards = group.querySelectorAll('.card');
+                let shopHasMatch = query === '' || shopName.includes(query);
+
+                cards.forEach(card => {
+                    const text = card.textContent.toLowerCase();
+                    const match = text.includes(query);
+                    card.style.display = (query === '' || match || shopName.includes(query)) ? '' : 'none';
+                    if (match) shopHasMatch = true;
+                });
+
+                group.style.display = shopHasMatch ? '' : 'none';
+                if (shopHasMatch) anyVisible = true;
+            });
+
+            document.getElementById('noResults').classList.toggle('hidden', anyVisible || query === '');
+        });
+    });
+
+    function toggleShop(btn) {
+        const items = btn.nextElementSibling;
+        const arrow = btn.querySelector('span');
+        items.classList.toggle('hidden');
+        arrow.classList.toggle('rotate-90');
+    }
+</script>
+{% endblock %}

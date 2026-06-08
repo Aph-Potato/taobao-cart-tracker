@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}淘宝购物车价格追踪{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        taobao: '#ff5000',
+                        'taobao-dark': '#e04800',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", "PingFang SC", sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        .price-down { color: #52c41a; }
+        .price-up { color: #ff4d4f; }
+        .price-same { color: #666; }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .chart-container {
+            width: 100%;
+            height: 200px;
+        }
+        .flash-message {
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-3">
+                    <a href="/" class="flex items-center space-x-3 no-underline">
+                        <span class="text-2xl">🛒</span>
+                        <span class="text-xl font-bold text-gray-900">价格追踪</span>
+                    </a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- 通知铃铛 -->
+                    <button id="notificationBell" onclick="toggleNotifications()"
+                            class="relative p-2 rounded-full hover:bg-gray-100 transition">
+                        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        <span id="notificationBadge"
+                              class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">
+                        </span>
+                    </button>
+
+                    <!-- 手动抓取按钮 -->
+                    <button onclick="triggerScrape()"
+                            class="bg-taobao text-white px-4 py-2 rounded-lg hover:bg-taobao-dark transition text-sm font-medium">
+                        🔄 立即抓取
+                    </button>
+
+                    <a href="/settings"
+                       class="text-gray-600 hover:text-gray-800 px-3 py-2 rounded-lg hover:bg-gray-100 transition text-sm">
+                        ⚙️ 设置
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 通知下拉面板 -->
+    <div id="notificationPanel"
+         class="hidden fixed top-16 right-4 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
+        <div class="p-3 border-b border-gray-100 flex justify-between items-center">
+            <span class="font-semibold text-sm">通知</span>
+            <button onclick="clearNotifications()" class="text-xs text-gray-400 hover:text-red-500">清空</button>
+        </div>
+        <div id="notificationList" class="divide-y divide-gray-50">
+            <div class="p-4 text-center text-gray-400 text-sm">暂无通知</div>
+        </div>
+    </div>
+
+    <!-- Toast 消息 -->
+    <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50">
+    </div>
+
+    <!-- 主内容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // ===== 全局函数 =====
+
+        // 显示 Toast 消息
+        function showToast(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500',
+                warning: 'bg-yellow-500',
+            };
+            const toast = document.getElementById('toast');
+            toast.innerHTML = `<div class="${colors[type] || colors.info} text-white px-6 py-3 rounded-lg shadow-lg flash-message text-sm">${message}</div>`;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.querySelector('div').style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        // 手动触发抓取
+        async function triggerScrape() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '⏳ 抓取中...';
+            try {
+                const res = await fetch('/api/trigger-scrape', { method: 'POST' });
+                // 尝试解析 JSON，即使 HTTP 状态码不是 2xx
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    throw new Error(`服务器错误 (${res.status}): ${text.substring(0, 200)}`);
+                }
+                if (data.success) {
+                    showToast(`✅ ${data.message}`, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    const errMsg = data.errors && data.errors.length > 0
+                        ? data.errors.join('; ')
+                        : data.message;
+                    showToast(`⚠️ ${errMsg}`, 'warning');
+                }
+            } catch (e) {
+                showToast(`❌ 抓取失败: ${e.message}`, 'error');
+            }
+            btn.disabled = false;
+            btn.textContent = '🔄 立即抓取';
+        }
+
+        // 切换通知面板
+        function toggleNotifications() {
+            const panel = document.getElementById('notificationPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                loadNotifications();
+            }
+        }
+
+        // 加载通知
+        async function loadNotifications() {
+            try {
+                const res = await fetch('/api/notifications');
+                const notifications = await res.json();
+                const list = document.getElementById('notificationList');
+                const badge = document.getElementById('notificationBadge');
+
+                if (notifications.length === 0) {
+                    list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">暂无通知</div>';
+                    badge.classList.add('hidden');
+                } else {
+                    list.innerHTML = notifications.map(n => `
+                        <div class="p-3 hover:bg-gray-50 cursor-pointer ${n.read ? 'opacity-50' : ''}"
+                             onclick="window.location.href='/product/${n.product_id}'">
+                            <div class="text-sm font-medium">${n.title}</div>
+                            <div class="text-xs text-gray-500 mt-1">${n.body}</div>
+                            <div class="text-xs text-gray-400 mt-1">${new Date(n.time).toLocaleString('zh-CN')}</div>
+                        </div>
+                    `).join('');
+
+                    const unread = notifications.filter(n => !n.read).length;
+                    if (unread > 0) {
+                        badge.textContent = unread;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+            } catch (e) {
+                console.error('加载通知失败:', e);
+            }
+        }
+
+        // 清空通知
+        async function clearNotifications() {
+            try {
+                await fetch('/api/notifications/clear', { method: 'POST' });
+                document.getElementById('notificationList').innerHTML =
+                    '<div class="p-4 text-center text-gray-400 text-sm">暂无通知</div>';
+                document.getElementById('notificationBadge').classList.add('hidden');
+            } catch (e) {
+                console.error('清空通知失败:', e);
+            }
+        }
+
+        // 点击空白处关闭通知面板
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('notificationPanel');
+            const bell = document.getElementById('notificationBell');
+            if (!panel.classList.contains('hidden') &&
+                !panel.contains(e.target) &&
+                !bell.contains(e.target)) {
+                panel.classList.add('hidden');
+            }
+        });
+
+        // 初始加载通知计数
+        loadNotifications();
+    </script>
+</body>
+</html>

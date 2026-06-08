@@ -1,0 +1,59 @@
+<div class="card hover:shadow-md transition-shadow" id="product-{{ product.id }}">
+    <div class="flex space-x-4">
+        <!-- 商品图片 -->
+        <div class="flex-shrink-0">
+            {% if product.image_url %}
+            <img src="{{ product.image_url }}" alt="{{ product.name }}"
+                 class="w-20 h-20 object-cover rounded-lg bg-gray-100"
+                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 80 80%22><rect fill=%22%23f0f0f0%22 width=%2280%22 height=%2280%22/><text x=%2225%22 y=%2245%22 fill=%22%23999%22 font-size=%2214%22>暂无</text></svg>'">
+            {% else %}
+            <div class="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">
+                暂无图片
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 商品信息 -->
+        <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start">
+                <a href="/product/{{ product.id }}" class="text-sm font-medium text-gray-900 hover:text-taobao transition line-clamp-2">
+                    {{ product.name }}
+                </a>
+                <div class="flex space-x-1 ml-2 flex-shrink-0">
+                    {% if product.current_price and product.lowest_price %}
+                        {% if product.current_price <= product.lowest_price %}
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">最低价</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if product.shop_name %}
+            <div class="text-xs text-gray-400 mt-0.5">{{ product.shop_name }}</div>
+            {% endif %}
+
+            <!-- 价格信息 -->
+            <div class="flex items-baseline space-x-2 mt-2">
+                <span class="text-2xl font-bold text-taobao">¥{{ "%.2f"|format(product.current_price) if product.current_price else 'N/A' }}</span>
+                {% if product.current_original_price and product.current_original_price > (product.current_price or 0) %}
+                <span class="text-sm text-gray-400 line-through">¥{{ "%.2f"|format(product.current_original_price) }}</span>
+                {% endif %}
+            </div>
+
+            <!-- 价格对比 -->
+            <div class="flex space-x-4 mt-1 text-xs">
+                {% if product.lowest_price %}
+                <span class="text-gray-500">
+                    历史最低: <span class="font-medium text-green-600">¥{{ "%.2f"|format(product.lowest_price) }}</span>
+                </span>
+                {% endif %}
+                {% if product.avg_price and product.total_records > 1 %}
+                <span class="text-gray-500">
+                    均价: <span class="font-medium">¥{{ "%.2f"|format(product.avg_price) }}</span>
+                </span>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>
