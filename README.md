@@ -13,8 +13,8 @@
 
 ## 准备条件
 
-- **Windows** 系统（Edge 浏览器自带）
-- 一个 **淘宝账号**（用于登录购物车）
+- **Windows 10/11** 电脑（系统自带 Microsoft Edge 浏览器，无需额外安装）
+- 一个 **淘宝账号**
 
 ## 安装教程（一步一步来）
 
@@ -57,15 +57,7 @@ pip install -r requirements.txt
 
 等待安装完成（约 1 分钟）。
 
-### 4. 安装 Playwright 浏览器
-
-```bash
-python -m playwright install
-```
-
-这一步会下载一个 Chromium 浏览器（约 150MB），等它跑完。
-
-### 5. 启动网站
+### 4. 启动网站
 
 ```bash
 python run.py
@@ -75,7 +67,7 @@ python run.py
 
 打开浏览器，访问 **http://localhost:8000**，你会看到空白的仪表盘。
 
-### 6. 首次抓取
+### 5. 首次抓取
 
 点击页面上的 **🔄 立即抓取** 按钮。
 
@@ -111,7 +103,7 @@ python run.py
 
 **Q: 启动报错 "playwright not found"？**
 
-重新执行 `pip install playwright` 和 `python -m playwright install`。
+重新执行 `pip install playwright`。
 
 **Q: 抓取时 Edge 打开了但没反应？**
 
